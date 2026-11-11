@@ -178,3 +178,15 @@ test_downloads/
 dsh/node_modules/
 dsh/npm-debug.log*
 dsh/.npm/
+
+# APM dependencies
+apm_modules/
+
+# Files APM deploys into .claude/ (pinned/reproducible via apm.lock.yaml,
+# not vendored -- see apm.yml). Update this list by hand when apm.yml
+# changes; check apm.lock.yaml's deployed_files for the current set.
+/.claude/agents/thermo-nuclear-code-quality-review-subagent.md
+/.claude/agents/thermo-nuclear-review-subagent.md
+/.claude/skills/thermo-nuclear-code-quality-review/
+/.claude/skills/thermo-nuclear-review/
+/.claude/skills/thermos/

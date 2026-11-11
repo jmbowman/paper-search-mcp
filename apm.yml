@@ -1,0 +1,12 @@
+name: paper-search-mcp
+version: 1.0.0
+description: APM project for the paper-search-mcp fork (integration branch only)
+author: Jeremy Bowman
+targets:
+  - claude
+dependencies:
+  apm:
+    - cursor/plugins/thermos#a29f5a8ca161b1de4ffc5484454958bebc04eaa5
+  mcp: []
+includes: auto
+scripts: {}
