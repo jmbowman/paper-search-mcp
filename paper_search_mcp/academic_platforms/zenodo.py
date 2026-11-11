@@ -13,8 +13,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import requests
-
+from .. import http_limits
 from ..config import get_env
 from ..paper import Paper
 from .base import PaperSource
@@ -35,7 +34,7 @@ class ZenodoSearcher(PaperSource):
 
     def __init__(self, access_token: Optional[str] = None) -> None:
         self.access_token = access_token or get_env("ZENODO_ACCESS_TOKEN", "")
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update(
             {"User-Agent": self.USER_AGENT, "Accept": "application/json"}
         )

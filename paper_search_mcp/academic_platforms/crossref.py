@@ -3,6 +3,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import requests
 import time
+from .. import http_limits
 from ..paper import Paper
 from .base import PaperSource
 import logging
@@ -31,7 +32,7 @@ class CrossRefSearcher(PaperSource):
     )
     
     def __init__(self):
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update({
             'User-Agent': self.USER_AGENT,
             'Accept': 'application/json'

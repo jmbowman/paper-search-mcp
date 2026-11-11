@@ -9,6 +9,7 @@ from urllib.parse import quote, urlencode
 from requests.exceptions import SSLError
 import urllib3
 
+from .. import http_limits
 from ..paper import Paper
 from ..utils import extract_doi
 from ..config import get_env
@@ -34,7 +35,7 @@ class CiteSeerXSearcher(PaperSource):
             api_key: Optional API key (CiteSeerX API is generally open access)
         """
         self.api_key = api_key or get_env("CITESEERX_API_KEY", "")
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update({
             'User-Agent': 'paper-search-mcp/1.0 (https://github.com/openags/paper-search-mcp)',
             'Accept': 'application/json'

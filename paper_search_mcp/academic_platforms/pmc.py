@@ -6,6 +6,7 @@ from datetime import datetime
 import logging
 import os
 from pathlib import Path
+from .. import http_limits
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
@@ -25,7 +26,7 @@ class PMCSearcher(PaperSource):
     EUTILS_FETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 
     def __init__(self):
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update({
             'User-Agent': 'paper-search-mcp/1.0 (mailto:openags@example.com)',
             'Accept': 'application/xml'

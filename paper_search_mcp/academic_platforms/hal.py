@@ -14,8 +14,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import requests
-
+from .. import http_limits
 from ..paper import Paper
 from .base import PaperSource
 
@@ -51,7 +50,7 @@ class HALSearcher(PaperSource):
     )
 
     def __init__(self) -> None:
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update(
             {"User-Agent": self.USER_AGENT, "Accept": "application/json"}
         )

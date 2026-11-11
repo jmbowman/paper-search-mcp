@@ -13,6 +13,7 @@ import feedparser
 import requests
 from pypdf import PdfReader
 
+from .. import http_limits
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
@@ -25,17 +26,15 @@ class ArxivSearcher(PaperSource):
     """Searcher for arXiv papers.
 
     arXiv TOU requires no more than 1 request per 3 seconds with a single
-    concurrent connection (https://info.arxiv.org/help/api/tou.html). A shared
-    lock and timestamp enforce that policy across all instances in this Python
-    process. Cross-process and cross-machine pacing remain the caller's
-    responsibility.
+    concurrent connection (https://info.arxiv.org/help/api/tou.html). The
+    shared HTTP layer (``http_limits``) paces requests, across processes when
+    PAPER_SEARCH_MCP_RATE_LIMIT_DIR is set; a shared lock keeps one connection
+    at a time in this process.
     """
     BASE_URL = "https://export.arxiv.org/api/query"
-    MIN_INTERVAL_SEC = 3.0  # arXiv TOU minimum
     MAX_ATTEMPTS = 3
     RETRYABLE_STATUS_CODES = frozenset((429, 500, 502, 503, 504))
     _request_lock = Lock()
-    _last_request_at = 0.0
     _FIELD_PREFIX_RE = re.compile(
         r"(?:^|\s)(ti|au|abs|co|jr|cat|rn|id|all):",
         re.IGNORECASE,
@@ -55,20 +54,11 @@ class ArxivSearcher(PaperSource):
         return os.path.join(os.fspath(save_path), *paper_id.split("/")) + ".pdf"
 
     def __init__(self):
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update({
             'User-Agent': 'paper-search-mcp/1.0 (mailto:openags@example.com)',
             'Accept': 'application/atom+xml, application/xml;q=0.9, */*;q=0.8',
         })
-
-    @classmethod
-    def _pace_locked(cls):
-        """Pace a request while the process-wide request lock is held."""
-        now = time.monotonic()
-        elapsed = now - cls._last_request_at
-        if cls._last_request_at > 0 and elapsed < cls.MIN_INTERVAL_SEC:
-            time.sleep(cls.MIN_INTERVAL_SEC - elapsed)
-        cls._last_request_at = time.monotonic()
 
     @staticmethod
     def _is_soft_rate_limit(response: requests.Response) -> bool:
@@ -119,18 +109,19 @@ class ArxivSearcher(PaperSource):
             return False
 
     def _request_with_retries(self, params):
-        """Issue one serialized, paced arXiv request sequence."""
+        """Issue one serialized arXiv request sequence; the session paces each attempt."""
         response = None
         saw_unusable_406 = False
         with self._request_lock:
             for attempt in range(self.MAX_ATTEMPTS):
-                self._pace_locked()
                 try:
                     response = self.session.get(
                         self.BASE_URL,
                         params=params,
                         timeout=30,
                     )
+                except http_limits.RateLimited:
+                    raise
                 except requests.RequestException:
                     response = None
                     if attempt < self.MAX_ATTEMPTS - 1:
@@ -244,10 +235,9 @@ class ArxivSearcher(PaperSource):
         if not self._request_lock.acquire(timeout=30):
             raise requests.RequestException("arXiv download timed out waiting for its request slot")
         try:
-            self._pace_locked()
             # Connect/read timeouts are not a hard total transfer deadline.
             # Do not retry access failures or change the caller's identity.
-            with requests.get(pdf_url, stream=True, timeout=(10, 30)) as response:
+            with http_limits.get(pdf_url, stream=True, timeout=(10, 30)) as response:
                 if response.status_code != 200:
                     raise requests.RequestException(
                         f"arXiv download failed: HTTP {response.status_code}"

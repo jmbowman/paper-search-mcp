@@ -145,7 +145,7 @@ def test_timed_out_blocking_search_keeps_capacity_until_worker_exits():
 def test_pubmed_search_uses_bounded_request_timeout():
     response = Mock(content=b"<eSearchResult><IdList /></eSearchResult>")
     with patch(
-        "paper_search_mcp.academic_platforms.pubmed.requests.get",
+        "paper_search_mcp.academic_platforms.pubmed.http_limits.get",
         return_value=response,
     ) as request:
         assert PubMedSearcher().search("test") == []

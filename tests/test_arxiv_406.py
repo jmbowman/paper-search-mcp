@@ -36,15 +36,12 @@ ARXIV_FEED = b'''<?xml version="1.0" encoding="UTF-8"?>
 @pytest.fixture
 def paced_searcher():
     searcher = ArxivSearcher()
-    with (
-        patch.object(ArxivSearcher, "_pace_locked") as pace,
-        patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as wait,
-    ):
-        yield searcher, pace, wait
+    with patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as wait:
+        yield searcher, wait
 
 
 def test_valid_406_arxiv_feed_returns_papers_without_retry(paced_searcher):
-    searcher, pace, wait = paced_searcher
+    searcher, wait = paced_searcher
     searcher.session.get = Mock(return_value=response_with(ARXIV_FEED, 406))
 
     papers = searcher.search("machine unlearning")
@@ -54,13 +51,13 @@ def test_valid_406_arxiv_feed_returns_papers_without_retry(paced_searcher):
     assert papers[0].authors == ["Example Author"]
     assert papers[0].source == "arxiv"
     assert papers[0].abstract == "A paper about machine unlearning."
-    pace.assert_called_once_with()
+    assert searcher.session.get.call_count == 1
     wait.assert_not_called()
     assert searcher.session.get.call_args.kwargs["timeout"] == 30
 
 
 def test_search_retains_legacy_id_for_download(paced_searcher):
-    searcher, _, _ = paced_searcher
+    searcher, _ = paced_searcher
     feed = ARXIV_FEED.replace(b"2401.12345v1", b"hep-th/9901001v1")
     searcher.session.get = Mock(return_value=response_with(feed))
     papers = searcher.search("legacy paper")
@@ -86,14 +83,13 @@ def test_search_retains_legacy_id_for_download(paced_searcher):
 ], ids=["empty-body", "html", "soft-limit", "empty-feed", "zero-total", "truncated",
         "wrong-namespace", "unrelated-feed", "api-error", "wrong-host", "invalid-entry", "no-authors"])
 def test_unusable_406_retries_then_raises(body, paced_searcher):
-    searcher, pace, wait = paced_searcher
+    searcher, wait = paced_searcher
     searcher.session.get = Mock(return_value=response_with(body, 406))
 
     with pytest.raises(requests.RequestException, match="HTTP 406.*usable arXiv Atom"):
         searcher.search("test")
 
     assert searcher.session.get.call_count == ArxivSearcher.MAX_ATTEMPTS
-    assert pace.call_count == ArxivSearcher.MAX_ATTEMPTS
     assert [call.args for call in wait.call_args_list] == [(1.5,), (3.0,)]
 
 
@@ -103,17 +99,17 @@ def test_unusable_406_retries_then_raises(body, paced_searcher):
     (EMPTY_ATOM_FEED, 200, 0),
 ])
 def test_unusable_406_can_recover(body, status, expected, paced_searcher):
-    searcher, pace, wait = paced_searcher
+    searcher, wait = paced_searcher
     searcher.session.get = Mock(side_effect=[response_with(b"", 406), response_with(body, status)])
 
     assert len(searcher.search("test")) == expected
-    assert pace.call_count == 2
+    assert searcher.session.get.call_count == 2
     wait.assert_called_once_with(1.5)
 
 
 @pytest.mark.parametrize("last_response", [requests.ConnectionError("offline"), response_with(b"", 503)])
 def test_406_followed_by_failures_cannot_become_false_zero(last_response, paced_searcher):
-    searcher, _, _ = paced_searcher
+    searcher, _ = paced_searcher
     searcher.session.get = Mock(side_effect=[response_with(b"", 406), last_response, last_response])
     with pytest.raises(requests.RequestException, match="HTTP 406"):
         searcher.search("test")
@@ -121,23 +117,23 @@ def test_406_followed_by_failures_cannot_become_false_zero(last_response, paced_
 
 
 def test_normal_200_empty_feed_is_still_successful(paced_searcher):
-    searcher, pace, wait = paced_searcher
+    searcher, wait = paced_searcher
     searcher.session.get = Mock(return_value=response_with(EMPTY_ATOM_FEED))
     assert searcher.search("test") == []
-    pace.assert_called_once_with()
+    assert searcher.session.get.call_count == 1
     wait.assert_not_called()
 
 
 @pytest.mark.parametrize("status", [400, 403, 404, 500])
 def test_unrelated_http_failure_contract_is_unchanged(status, paced_searcher):
-    searcher, _, _ = paced_searcher
+    searcher, _ = paced_searcher
     # A valid body must not silently override any other non-200 status.
     searcher.session.get = Mock(return_value=response_with(ARXIV_FEED, status))
     assert searcher.search("test") == []
 
 
 def test_unified_search_reports_406_as_source_error(paced_searcher):
-    searcher, _, _ = paced_searcher
+    searcher, _ = paced_searcher
     searcher.session.get = Mock(return_value=response_with(b"", 406))
     with patch.object(server, "arxiv_searcher", searcher):
         result = asyncio.run(server.search_papers("test", sources="arxiv"))
@@ -168,8 +164,7 @@ def pdf_bytes():
 
 
 @pytest.fixture
-def searcher(monkeypatch):
-    monkeypatch.setattr(arxiv.ArxivSearcher, '_pace_locked', Mock())
+def searcher():
     return arxiv.ArxivSearcher()
 
 
@@ -179,7 +174,7 @@ def response(monkeypatch, chunks, status=200):
     result.status_code = status
     result.iter_content.return_value = iter(chunks)
     get = Mock(return_value=result)
-    monkeypatch.setattr(arxiv.requests, 'get', get)
+    monkeypatch.setattr(arxiv.http_limits, 'get', get)
     return get
 
 
@@ -189,7 +184,6 @@ def test_success_is_paced_streamed_and_atomically_saved(searcher, monkeypatch, t
     path = searcher.download_pdf(paper_id, str(tmp_path / 'with spaces'))
     assert open(path, 'rb').read() == pdf_bytes
     assert get.call_args.kwargs == {'stream': True, 'timeout': (10, 30)}
-    searcher._pace_locked.assert_called_once_with()
     assert not list(tmp_path.rglob('*.part'))
 
 
@@ -245,7 +239,7 @@ def test_size_limit_cleans_partial_without_replacing_target(searcher, monkeypatc
 @pytest.mark.parametrize('paper_id', ['../secret', '/etc/passwd', '2406.17835/../../x', 'x?y=z', '2406.17835.pdf', '2406.17835v0', None])
 def test_invalid_id_rejected_before_network_or_directory(searcher, monkeypatch, tmp_path, paper_id):
     get = Mock()
-    monkeypatch.setattr(arxiv.requests, 'get', get)
+    monkeypatch.setattr(arxiv.http_limits, 'get', get)
     for method in (searcher.download_pdf, searcher.read_paper):
         with pytest.raises(ValueError, match='arXiv paper ID'):
             method(paper_id, str(tmp_path / 'absent'))

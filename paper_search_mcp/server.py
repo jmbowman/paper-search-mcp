@@ -14,9 +14,8 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from threading import BoundedSemaphore
 from typing import Annotated, Any, Dict, List, Optional
 from pydantic import Field
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
-import httpx
 from mcp.server.fastmcp import FastMCP
 
 from .academic_platforms.arxiv import ArxivSearcher
@@ -42,6 +41,7 @@ from .academic_platforms.ssrn import SSRNSearcher
 from .academic_platforms.openreview import OpenReviewSearcher
 from .academic_platforms.unpaywall import UnpaywallResolver, UnpaywallSearcher
 from .academic_platforms.zenodo import ZenodoSearcher
+from . import http_limits
 from .config import get_env, load_env_file
 from .search_cache import SearchCache, search_key
 
@@ -291,6 +291,19 @@ def _safe_filename(filename_hint: str, default: str = "paper") -> str:
     return safe[:120]
 
 
+def _get_fallback_pdf(url: str):
+    limit = http_limits.SERVICE_LIMITS.get((urlsplit(url).hostname or "").lower())
+    if limit is None or limit.service != "arxiv":
+        return http_limits.get(url, timeout=30)
+    # arXiv allows one connection at a time; share the arXiv connector's lock.
+    if not ArxivSearcher._request_lock.acquire(timeout=http_limits.MAX_WAIT_SECONDS):
+        raise http_limits.RateLimited("arxiv: connection busy")
+    try:
+        return http_limits.get(url, timeout=30)
+    finally:
+        ArxivSearcher._request_lock.release()
+
+
 async def _download_from_url(
     pdf_url: str,
     save_path: str,
@@ -307,8 +320,8 @@ async def _download_from_url(
     temporary_path = ""
 
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
-            response = await client.get(pdf_url)
+        # Through the shared HTTP layer, so rate limits (for example arXiv's) apply here too.
+        response = await asyncio.to_thread(_get_fallback_pdf, pdf_url)
 
         if response.status_code >= 400 or not response.content:
             return None

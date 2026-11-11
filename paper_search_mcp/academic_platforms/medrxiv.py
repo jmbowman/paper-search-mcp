@@ -3,6 +3,7 @@ from typing import List
 import requests
 import os
 from datetime import datetime, timedelta
+from .. import http_limits
 from ..paper import Paper
 from .base import PaperSource
 from pypdf import PdfReader
@@ -15,7 +16,7 @@ class MedRxivSearcher(PaperSource):
     BASE_URL = "https://api.biorxiv.org/details/medrxiv"
 
     def __init__(self):
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.proxies = {'http': None, 'https': None}
         self.timeout = 30
         self.max_retries = 3

@@ -36,7 +36,7 @@ def searcher(monkeypatch):
     monkeypatch.setattr(instance, "get_paper_details", Mock(return_value=paper))
     # Every download must opt into a response below, never the real network.
     monkeypatch.setattr(
-        semantic.requests, "get", Mock(side_effect=AssertionError("Unexpected request"))
+        semantic.http_limits, "get", Mock(side_effect=AssertionError("Unexpected request"))
     )
     return instance
 
@@ -49,7 +49,7 @@ def mock_response(monkeypatch, content, content_type="application/pdf", status=2
     if content_type is not None:
         response.headers["Content-Type"] = content_type
     get = Mock(return_value=response)
-    monkeypatch.setattr(semantic.requests, "get", get)
+    monkeypatch.setattr(semantic.http_limits, "get", get)
     return get
 
 
@@ -129,7 +129,7 @@ def test_read_paper_reuses_cached_file_and_metadata_format(
 
     result = searcher.read_paper("paper/123", str(tmp_path))
 
-    semantic.requests.get.assert_not_called()
+    semantic.http_limits.get.assert_not_called()
     searcher.get_paper_details.assert_called_once_with("paper/123")
     reader.assert_called_once_with(str(cached))
     assert cached.read_bytes() == pdf_bytes
@@ -146,7 +146,7 @@ def test_missing_pdf_url_keeps_error_and_makes_no_request(searcher, tmp_path, me
     result = getattr(searcher, method)("paper/123", str(tmp_path))
 
     assert result == "Error: Could not find PDF URL for paper paper/123"
-    semantic.requests.get.assert_not_called()
+    semantic.http_limits.get.assert_not_called()
     assert list(tmp_path.iterdir()) == []
 
 

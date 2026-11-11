@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 import time
 from bs4 import BeautifulSoup
 
+from .. import http_limits
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
@@ -24,7 +25,7 @@ class DBLPSearcher(PaperSource):
     DEFAULT_FORMAT = "xml"
 
     def __init__(self):
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update({
             'User-Agent': 'paper-search-mcp/1.0 (https://github.com/openags/paper-search-mcp)',
             'Accept': 'application/xml, application/json'
