@@ -2,6 +2,7 @@ from typing import List
 from datetime import datetime
 import requests
 import logging
+from .. import http_limits
 from ..paper import Paper
 from .base import PaperSource
 from ..utils import extract_doi
@@ -27,7 +28,7 @@ class OpenAlexSearcher(PaperSource):
         api_key: str | None = None,
         email: str | None = None,
     ):
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.api_key = (
             api_key if api_key is not None else get_env("OPENALEX_API_KEY", "")
         ).strip()

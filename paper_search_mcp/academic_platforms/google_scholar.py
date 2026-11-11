@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 import time
 import random
 import re
+from .. import http_limits
 from ..paper import Paper
 from ..utils import extract_doi
 from ..config import get_env
@@ -51,7 +52,7 @@ class GoogleScholarSearcher(PaperSource):
 
     def _setup_session(self):
         """Initialize session with random user agent"""
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update({
             'User-Agent': random.choice(self.BROWSERS),
             'Accept': 'text/html,application/xhtml+xml',

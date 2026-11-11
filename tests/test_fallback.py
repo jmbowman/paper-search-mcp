@@ -8,20 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from paper_search_mcp import server
 
 
-class _FakeAsyncClient:
-    def __init__(self, response):
-        self.response = response
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, traceback):
-        return False
-
-    async def get(self, url):
-        return self.response
-
-
 def _empty_searcher():
     return SimpleNamespace(search=lambda query, max_results=3: [])
 
@@ -565,11 +551,37 @@ class TestDownloadFromUrl(unittest.TestCase):
         )
 
     def _patch_client(self, response):
-        return patch.object(
-            server.httpx,
-            "AsyncClient",
-            return_value=_FakeAsyncClient(response),
-        )
+        return patch.object(server.http_limits, "get", return_value=response)
+
+    def test_request_goes_through_shared_layer(self):
+        with tempfile.TemporaryDirectory() as save_path:
+            with self._patch_client(self._response(b"<html></html>", "text/html")) as get:
+                asyncio.run(server._download_from_url("https://arxiv.org/pdf/2401.12345", save_path))
+        get.assert_called_once_with("https://arxiv.org/pdf/2401.12345", timeout=30)
+
+    def test_arxiv_download_holds_the_arxiv_connection_lock(self):
+        held = []
+
+        def get(url, **kwargs):
+            held.append(server.ArxivSearcher._request_lock.locked())
+            return self._response(b"<html></html>", "text/html")
+
+        with tempfile.TemporaryDirectory() as save_path:
+            with patch.object(server.http_limits, "get", side_effect=get):
+                asyncio.run(server._download_from_url("https://arxiv.org/pdf/2401.12345", save_path))
+                asyncio.run(server._download_from_url("https://example.org/paper.pdf", save_path))
+        self.assertEqual(held, [True, False])
+        self.assertFalse(server.ArxivSearcher._request_lock.locked())
+
+    def test_rate_limited_download_moves_on(self):
+        with tempfile.TemporaryDirectory() as save_path:
+            with patch.object(
+                server.http_limits, "get", side_effect=server.http_limits.RateLimited("arxiv")
+            ):
+                result = asyncio.run(
+                    server._download_from_url("https://arxiv.org/pdf/2401.12345", save_path)
+                )
+        self.assertIsNone(result)
 
     def test_html_at_pdf_url_is_rejected(self):
         response = self._response(b"<html>login page</html>", "text/html")

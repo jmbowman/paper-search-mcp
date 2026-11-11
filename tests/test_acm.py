@@ -74,7 +74,7 @@ class TestACMDownload(unittest.TestCase):
     def test_blocked_download_points_to_browser_and_fallback(self):
         blocked = unittest.mock.Mock(status_code=403, content=b"<!DOCTYPE html>")
         with unittest.mock.patch(
-            "paper_search_mcp.academic_platforms.acm.requests.get", return_value=blocked
+            "paper_search_mcp.academic_platforms.acm.http_limits.get", return_value=blocked
         ):
             with self.assertRaises(IOError) as ctx:
                 ACMSearcher().download_pdf("10.1145/3292500.3330701")
@@ -86,7 +86,7 @@ class TestACMDownload(unittest.TestCase):
         import tempfile, os
         ok = unittest.mock.Mock(status_code=200, content=b"%PDF-1.7 test")
         with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch(
-            "paper_search_mcp.academic_platforms.acm.requests.get", return_value=ok
+            "paper_search_mcp.academic_platforms.acm.http_limits.get", return_value=ok
         ):
             path = ACMSearcher().download_pdf("10.1145/3292500.3330701", tmp)
             with open(path, "rb") as f:

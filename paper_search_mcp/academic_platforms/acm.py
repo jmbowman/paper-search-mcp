@@ -18,9 +18,8 @@ import logging
 import os
 from typing import List, Optional
 
-import requests
-
 from .crossref import CrossRefSearcher
+from .. import http_limits
 from ..paper import Paper
 
 logger = logging.getLogger(__name__)
@@ -78,7 +77,7 @@ class ACMSearcher(CrossRefSearcher):
         doi = self._validate_acm_doi(paper_id)
 
         pdf_url = self.PDF_URL_TEMPLATE.format(doi=doi)
-        response = requests.get(
+        response = http_limits.get(
             pdf_url,
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
             timeout=30,

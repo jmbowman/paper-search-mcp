@@ -13,6 +13,7 @@ import requests
 import xml.etree.ElementTree as ET
 import time
 import logging
+from .. import http_limits
 from ..paper import Paper
 from .base import PaperSource
 
@@ -56,7 +57,7 @@ class OAIPMHSearcher(PaperSource):
         """
         self.base_url = base_url
         self.metadata_prefix = metadata_prefix
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update({
             'User-Agent': 'paper-search-mcp/0.1.3 (OAI-PMH client; https://github.com/openags/paper-search-mcp)',
             'Accept': 'application/xml'

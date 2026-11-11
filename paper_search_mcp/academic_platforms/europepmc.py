@@ -4,6 +4,7 @@ import requests
 import logging
 from datetime import datetime
 from pathlib import Path
+from .. import http_limits
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
@@ -18,7 +19,7 @@ class EuropePMCSearcher(PaperSource):
     BASE_URL = "https://www.ebi.ac.uk/europepmc/webservices/rest"
 
     def __init__(self):
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update({
             'User-Agent': 'paper-search-mcp/1.0 (mailto:openags@example.com)',
             'Accept': 'application/json'

@@ -20,6 +20,7 @@ from typing import Any, List, Optional
 import requests
 
 from .base import PaperSource
+from .. import http_limits
 from ..paper import Paper
 from ..config import get_env
 
@@ -48,7 +49,7 @@ class IEEESearcher(PaperSource):
 
     def __init__(self) -> None:
         self.api_key: str = get_env("IEEE_API_KEY", "").strip()
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update({
             "User-Agent": "paper-search-mcp/1.0",
             "Accept": "application/json",

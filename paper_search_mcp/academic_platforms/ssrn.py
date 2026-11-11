@@ -25,6 +25,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from .base import PaperSource
+from .. import http_limits
 from ..paper import Paper
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,7 @@ class SSRNSearcher(PaperSource):
     _RATE_LIMIT_SECONDS = 2.0  # polite delay between requests
 
     def __init__(self) -> None:
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.auth = _PublicOnlyAuth()
         self.session.headers.update(
             {

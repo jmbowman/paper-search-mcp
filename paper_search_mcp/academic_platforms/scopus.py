@@ -9,7 +9,6 @@ import re
 from urllib.parse import quote
 
 from lxml import etree
-import requests
 
 from .base import PaperSource
 from .institutional import (
@@ -18,6 +17,7 @@ from .institutional import (
     result_limit, safe_int, text,
 )
 from ..config import get_env
+from .. import http_limits
 from ..paper import Paper
 
 
@@ -45,7 +45,7 @@ class ScopusSearcher(PaperSource):
 
     def __init__(self, api_key: str | None = None):
         self._api_key = api_key
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
 
     def _headers(self, accept: str = 'application/json') -> dict:
         key = (get_env('SCOPUS_API_KEY', '') if self._api_key is None else self._api_key).strip()

@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 import requests
 from pypdf import PdfReader
 
+from .. import http_limits
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
@@ -24,7 +25,7 @@ class BioRxivSearcher(PaperSource):
     )
 
     def __init__(self):
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.proxies = {"http": None, "https": None}
         self.timeout = 30
         self.max_retries = 3

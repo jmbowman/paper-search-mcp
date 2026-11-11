@@ -3,6 +3,7 @@ from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 import random
+from .. import http_limits
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
@@ -30,7 +31,7 @@ class IACRSearcher(PaperSource):
 
     def _setup_session(self):
         """Initialize session with random user agent"""
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update(
             {
                 "User-Agent": random.choice(self.BROWSERS),
@@ -244,7 +245,7 @@ class IACRSearcher(PaperSource):
                 return f"Error: Could not find PDF URL for paper {paper_id}"
 
             # Download the PDF
-            pdf_response = requests.get(paper.pdf_url, timeout=30)
+            pdf_response = http_limits.get(paper.pdf_url, timeout=30)
             pdf_response.raise_for_status()
 
             # Create download directory if it doesn't exist

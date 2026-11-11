@@ -1,8 +1,8 @@
 # paper_search_mcp/sources/pubmed.py
 from typing import List
-import requests
 from xml.etree import ElementTree as ET
 from datetime import datetime
+from .. import http_limits
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
@@ -21,7 +21,7 @@ class PubMedSearcher(PaperSource):
             'retmode': 'xml',
             'sort': sort,
         }
-        search_response = requests.get(
+        search_response = http_limits.get(
             self.SEARCH_URL,
             params=search_params,
             timeout=self.REQUEST_TIMEOUT_SECONDS,
@@ -36,7 +36,7 @@ class PubMedSearcher(PaperSource):
             'id': ','.join(ids),
             'retmode': 'xml'
         }
-        fetch_response = requests.get(
+        fetch_response = http_limits.get(
             self.FETCH_URL,
             params=fetch_params,
             timeout=self.REQUEST_TIMEOUT_SECONDS,

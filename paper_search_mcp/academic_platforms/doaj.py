@@ -11,8 +11,8 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import requests
 import logging
-import time
 from urllib.parse import quote
+from .. import http_limits
 from ..paper import Paper
 from ..utils import extract_doi
 from ..config import get_env
@@ -35,7 +35,7 @@ class DOAJSearcher(PaperSource):
                      Can also be set via DOAJ_API_KEY environment variable.
         """
         self.api_key = api_key or get_env("DOAJ_API_KEY", "")
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update({
             'User-Agent': self.USER_AGENT,
             'Accept': 'application/json'
@@ -129,10 +129,6 @@ class DOAJSearcher(PaperSource):
                 except Exception as e:
                     logger.warning(f"Error parsing DOAJ item: {e}")
                     continue
-
-            # Rate limiting - be polite to DOAJ API
-            # Public access: 100 requests/hour, API key: higher limits
-            time.sleep(0.5 if self.api_key else 1.0)
 
         except requests.exceptions.RequestException as e:
             logger.error(f"DOAJ API request failed: {e}")

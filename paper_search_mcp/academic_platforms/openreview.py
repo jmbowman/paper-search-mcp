@@ -16,6 +16,7 @@ import requests
 
 from .base import PaperSource
 from .public_pdf import save_verified_pdf, read_pdf_text
+from .. import http_limits
 from ..paper import Paper
 
 
@@ -37,7 +38,7 @@ class OpenReviewSearcher(PaperSource):
     MAX_RESULTS = 1000
 
     def __init__(self):
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         # Do not pick up .netrc credentials for this anonymous-only connector.
         self.session.auth = _AnonymousAuth()
         self.session.headers.update({"User-Agent": "paper-search-mcp/0.1.4", "Accept": "application/json"})

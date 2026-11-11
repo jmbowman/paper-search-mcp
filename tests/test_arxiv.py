@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 import requests
 
+from paper_search_mcp import http_limits
 from paper_search_mcp.academic_platforms.arxiv import ArxivSearcher
 
 
@@ -23,12 +24,6 @@ def response_with(content: bytes, status_code: int = 200):
 
 
 class TestArxivRateLimiting(unittest.TestCase):
-    def setUp(self):
-        ArxivSearcher._last_request_at = 0.0
-
-    def tearDown(self):
-        ArxivSearcher._last_request_at = 0.0
-
     def test_soft_rate_limit_retries_then_succeeds(self):
         searcher = ArxivSearcher()
         searcher.session.get = Mock(side_effect=[
@@ -36,14 +31,10 @@ class TestArxivRateLimiting(unittest.TestCase):
             response_with(EMPTY_ATOM_FEED),
         ])
 
-        with (
-            patch.object(ArxivSearcher, "_pace_locked") as pace,
-            patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as wait,
-        ):
+        with patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as wait:
             self.assertEqual(searcher.search("test"), [])
 
         self.assertEqual(searcher.session.get.call_count, 2)
-        self.assertEqual(pace.call_count, 2)
         wait.assert_called_once_with(5.0)
 
     def test_persistent_soft_rate_limit_raises_without_final_sleep(self):
@@ -53,7 +44,6 @@ class TestArxivRateLimiting(unittest.TestCase):
         )
 
         with (
-            patch.object(ArxivSearcher, "_pace_locked"),
             patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as wait,
             self.assertRaisesRegex(requests.RequestException, "Rate exceeded"),
         ):
@@ -71,7 +61,6 @@ class TestArxivRateLimiting(unittest.TestCase):
         )
 
         with (
-            patch.object(ArxivSearcher, "_pace_locked"),
             patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as wait,
             self.assertRaisesRegex(requests.RequestException, "HTTP 429"),
         ):
@@ -82,16 +71,26 @@ class TestArxivRateLimiting(unittest.TestCase):
             [(1.5,), (3.0,)],
         )
 
+    def test_shared_rate_limit_is_an_error_not_an_empty_result(self):
+        searcher = ArxivSearcher()
+        searcher.session.get = Mock(side_effect=http_limits.RateLimited("arxiv"))
+
+        with (
+            patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as wait,
+            self.assertRaises(http_limits.RateLimited),
+        ):
+            searcher.search("test")
+
+        self.assertEqual(searcher.session.get.call_count, 1)
+        wait.assert_not_called()
+
     def test_network_failure_keeps_existing_empty_result_behavior(self):
         searcher = ArxivSearcher()
         searcher.session.get = Mock(
             side_effect=requests.ConnectionError("offline")
         )
 
-        with (
-            patch.object(ArxivSearcher, "_pace_locked"),
-            patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as wait,
-        ):
+        with patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as wait:
             self.assertEqual(searcher.search("test"), [])
 
         self.assertEqual(searcher.session.get.call_count, 3)
@@ -109,21 +108,6 @@ class TestArxivRateLimiting(unittest.TestCase):
                 raise AssertionError("response.text must not be accessed")
 
         self.assertTrue(ArxivSearcher._is_soft_rate_limit(ContentOnlyResponse()))
-
-    def test_pacing_uses_shared_timestamp(self):
-        ArxivSearcher._last_request_at = 10.0
-
-        with (
-            patch(
-                "paper_search_mcp.academic_platforms.arxiv.time.monotonic",
-                side_effect=[11.0, 13.0],
-            ),
-            patch("paper_search_mcp.academic_platforms.arxiv.time.sleep") as wait,
-        ):
-            ArxivSearcher._pace_locked()
-
-        wait.assert_called_once_with(2.0)
-        self.assertEqual(ArxivSearcher._last_request_at, 13.0)
 
     def test_requests_from_different_instances_are_serialized(self):
         state_lock = Lock()
@@ -148,14 +132,13 @@ class TestArxivRateLimiting(unittest.TestCase):
         first.session.get = Mock(side_effect=get_response)
         second.session.get = Mock(side_effect=get_response)
 
-        with patch.object(ArxivSearcher, "_pace_locked"):
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                results = list(
-                    executor.map(
-                        lambda item: item.search("test"),
-                        [first, second],
-                    )
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(
+                executor.map(
+                    lambda item: item.search("test"),
+                    [first, second],
                 )
+            )
 
         self.assertEqual(results, [[], []])
         self.assertEqual(maximum_active_requests, 1)

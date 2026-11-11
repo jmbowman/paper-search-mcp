@@ -2,6 +2,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 import logging
 import requests
+from .. import http_limits
 from ..paper import Paper
 from ..utils import extract_doi
 from ..config import get_env
@@ -19,7 +20,7 @@ class UnpaywallResolver:
     def __init__(self, email: Optional[str] = None):
         configured_email = get_env("UNPAYWALL_EMAIL", "") if email is None else email
         self.email = configured_email.strip()
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update({
             "User-Agent": self.USER_AGENT,
             "Accept": "application/json",

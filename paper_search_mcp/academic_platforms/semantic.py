@@ -7,6 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import random
+from .. import http_limits
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
@@ -38,7 +39,7 @@ class SemanticSearcher(PaperSource):
 
     def _setup_session(self):
         """Initialize session with random user agent"""
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update(
             {
                 "User-Agent": random.choice(self.BROWSERS),
@@ -395,7 +396,7 @@ class SemanticSearcher(PaperSource):
     @staticmethod
     def _download_pdf_file(pdf_url: str, pdf_path: str) -> None:
         """Validate response bytes before atomically replacing the destination."""
-        response = requests.get(pdf_url, timeout=30)
+        response = http_limits.get(pdf_url, timeout=30)
         response.raise_for_status()
         content = response.content
         if not content:

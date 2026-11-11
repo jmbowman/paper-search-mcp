@@ -143,6 +143,20 @@ All keys are **optional** unless noted. Configure them in `~/.config/paper-searc
 
 All variables follow the `PAPER_SEARCH_MCP_<NAME>` prefix scheme. Legacy names without the prefix (e.g. `CORE_API_KEY`, `UNPAYWALL_EMAIL`) are still supported for backward compatibility.
 
+### Rate limits
+
+Every connector, and the server's fallback PDF download, sends its requests through one shared HTTP layer (`paper_search_mcp/http_limits.py`). For arXiv, Semantic Scholar, OpenAlex, Crossref, OpenAIRE, Zenodo, PubMed and DOAJ, the layer holds requests to each service's stated limit, using the higher limit where a configured key earns one (OpenAlex). If the next free slot is more than 10 seconds away, the request fails at once with a `RateLimited` error (a `requests.RequestException`) instead of waiting; connectors handle it as they do other request failures. Requests to other hosts are sent unchanged. The layer never retries; each connector keeps its own retry behavior.
+
+Limits hold within one process by default. Each MCP client starts its own server, and the CLI's `--source-timeout` runs each source in its own worker, so to share limits across processes on one machine, point every process at one local directory (SQLite's file locking is unreliable on network filesystems):
+
+```bash
+export PAPER_SEARCH_MCP_RATE_LIMIT_DIR=~/.cache/paper-search-mcp/limits
+```
+
+If it is set but the directory can't be created or written, searchers fail to start with an error naming the setting.
+
+Library users can change the table with `http_limits.register_service_limit()`, and install their own adapter (for example a `RateLimitedAdapter` subclass overriding `limit_for()` or `max_wait`) with `http_limits.set_adapter_factory()` before creating searchers.
+
 ---
 
 ## Known Upstream Limitations

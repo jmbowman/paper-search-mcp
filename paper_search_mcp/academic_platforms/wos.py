@@ -6,14 +6,13 @@ from __future__ import annotations
 
 from datetime import datetime
 
-import requests
-
 from .base import PaperSource
 from .institutional import (
     CredentialsRequiredError, ProviderResponseError, request_json, result_limit,
     safe_int, text,
 )
 from ..config import get_env
+from .. import http_limits
 from ..paper import Paper
 
 
@@ -22,7 +21,7 @@ class WebOfScienceSearcher(PaperSource):
 
     def __init__(self, api_key: str | None = None):
         self._api_key = api_key
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
 
     def is_configured(self) -> bool:
         return bool(self._key())

@@ -74,4 +74,5 @@ jobs:
           tests/test_acm.py
           tests/test_fallback.py
           tests/test_paper.py
+          tests/test_http_limits.py
           -q --tb=short

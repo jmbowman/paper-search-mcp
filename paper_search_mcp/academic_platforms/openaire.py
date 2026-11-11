@@ -8,6 +8,7 @@ import urllib3
 import time
 from requests.exceptions import SSLError
 
+from .. import http_limits
 from ..paper import Paper
 from ..utils import extract_doi
 from ..config import get_env
@@ -34,7 +35,7 @@ class OpenAiresearcher(PaperSource):
             api_key: Optional OpenAIRE API key (not usually required for basic access)
         """
         self.api_key = api_key or get_env("OPENAIRE_API_KEY", "")
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update({
             'User-Agent': 'paper-search-mcp/1.0 (https://github.com/openags/paper-search-mcp)',
             'Accept': 'application/json, application/xml'
@@ -80,7 +81,7 @@ class OpenAiresearcher(PaperSource):
             for attempt in range(3):
                 try:
                     if profile.get('use_raw_request'):
-                        response = requests.get(
+                        response = http_limits.get(
                             self.RESEARCH_PRODUCTS_URL,
                             params=profile['params'],
                             headers=profile.get('headers'),

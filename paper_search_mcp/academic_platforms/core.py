@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 import time
+from .. import http_limits
 from ..paper import Paper
 from ..utils import extract_doi
 from ..config import get_env
@@ -29,7 +30,7 @@ class CORESearcher(PaperSource):
             api_key: CORE API key (optional, can also be set via CORE_API_KEY env var)
         """
         self.api_key = api_key or get_env("CORE_API_KEY", "")
-        self.session = requests.Session()
+        self.session = http_limits.make_session()
         self.session.headers.update({
             'User-Agent': 'paper-search-mcp/1.0 (mailto:openags@example.com)',
             'Accept': 'application/json'
@@ -106,7 +107,7 @@ class CORESearcher(PaperSource):
                             'User-Agent': self.session.headers.get('User-Agent', ''),
                             'Accept': self.session.headers.get('Accept', 'application/json'),
                         }
-                        candidate = requests.get(
+                        candidate = http_limits.get(
                             f"{self.BASE_URL}/search/works",
                             params=params,
                             headers=fallback_headers,
